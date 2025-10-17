@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Equilibra - Controle Financeiro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            --color-receita: #10B981;
+            --color-despesa: #EF4444;
+            --color-neutro: #3B82F6;
+            --color-investimento: #F59E0B;
+            --color-caixinha: #8B5CF6;
+        }
+        .text-receita { color: var(--color-receita); }
+        .bg-receita { background-color: var(--color-receita); }
+        .border-receita { border-color: var(--color-receita); }
+        .text-despesa { color: var(--color-despesa); }
+        .bg-despesa { background-color: var(--color-despesa); }
+        .border-despesa { border-color: var(--color-despesa); }
+        .text-neutro { color: var(--color-neutro); }
+        .bg-neutro { background-color: var(--color-neutro); }
+        .border-neutro { border-color: var(--color-neutro); }
+        .text-investimento { color: var(--color-investimento); }
+        .bg-investimento { background-color: var(--color-investimento); }
+        .border-investimento { border-color: var(--color-investimento); }
+        .text-caixinha { color: var(--color-caixinha); }
+        .bg-caixinha { background-color: var(--color-caixinha); }
+
+        .status-pago { background-color: #D1FAE5; color: #065F46; }
+        .status-pendente { background-color: #FEF3C7; color: #92400E; }
+        .status-atrasado { background-color: #FEE2E2; color: #991B1B; }
+        
+        .dark .status-pago { background-color: #064E3B; color: #A7F3D0; }
+        .dark .status-pendente { background-color: #78350F; color: #FDE68A; }
+        .dark .status-atrasado { background-color: #7F1D1D; color: #FECACA; }
+
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 50;
+        }
+        #app { display: none; }
+        .card-bg {
+            background: linear-gradient(135deg, #4B5563 0%, #1F2937 100%);
+        }
+        .dark .card-bg {
+            background: linear-gradient(135deg, #374151 0%, #111827 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 font-sans antialiased">
+    <!-- Loader -->
+    <div id="loader" class="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col items-center justify-center">
+        <svg class="animate-spin h-10 w-10 text-blue-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-gray-600 dark:text-gray-300">Carregando...</p>
+    </div>
+    
+    <!-- Aplicação Principal -->
+    <div id="app">
+        <header class="bg-white dark:bg-gray-800 shadow-md p-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Equilibra</h1>
+            <div class="flex items-center space-x-4">
+                 <div class="flex items-center space-x-2">
+                    <button id="prev-month" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 dark:text-gray-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <h2 id="current-month-year" class="text-xl font-semibold w-40 text-center dark:text-gray-200"></h2>
+                    <button id="next-month" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 dark:text-gray-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                </div>
+                <button id="add-expense-btn" class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition flex items-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                    <span>Nova Despesa</span>
+                </button>
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+                    <svg id="theme-icon-light" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <svg id="theme-icon-dark" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <main class="p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow flex items-center space-x-4">
+                        <div class="p-3 rounded-full bg-green-100 dark:bg-green-900/50"><svg class="w-6 h-6 text-green-600 dark:text-green-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8.343a4.01 4.01 0 0 0-3.32-3.869 4 4 0 1 1 6.64 0A4.01 4.01 0 0 0 12 12.657V21z"/><path d="M12 3v2.343"/></svg></div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Receitas do Mês</p>
+                            <p id="total-receitas" class="text-2xl font-bold text-receita">R$ 0,00</p>
+                        </div>
+                    </div>
+                     <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow flex items-center space-x-4">
+                        <div class="p-3 rounded-full bg-red-100 dark:bg-red-900/50"><svg class="w-6 h-6 text-red-600 dark:text-red-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8.343a4.01 4.01 0 0 0 3.32 3.869 4 4 0 1 1-6.64 0A4.01 4.01 0 0 0 12 11.343V3z"/><path d="M12 21v-2.343"/></svg></div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Despesas do Mês</p>
+                            <p id="total-despesas" class="text-2xl font-bold text-despesa">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow flex items-center space-x-4">
+                        <div class="p-3 rounded-full bg-amber-100 dark:bg-amber-900/50"><svg class="w-6 h-6 text-amber-600 dark:text-amber-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4"/><path d="M20.2 10.2c.1-.4.2-.8.2-1.2a10 10 0 1 0-19.5 2.5"/><path d="M13.4 2.6c.2.2.3.4.5.6"/><path d="M21.8 11.8c-.1.4-.2.8-.2 1.2"/><path d="M3.8 11.8c.1-.4.2-.8.2-1.2"/><path d="M10.6 21.4c-.2-.2-.3-.4-.5-.6"/></svg></div>
+                        <div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Total Investido</p>
+                            <p id="total-investido" class="text-2xl font-bold text-investimento">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <div id="saldo-final-box" class="p-4 rounded-xl shadow flex items-center justify-center text-white font-bold text-lg">
+                        <span id="saldo-final-text"></span>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Lançamentos de Despesas do Mês</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="border-b-2 border-gray-200 dark:border-gray-700">
+                                <tr>
+                                    <th class="py-2 px-3 dark:text-gray-300">Data</th><th class="py-2 px-3 dark:text-gray-300">Descrição</th><th class="py-2 px-3 dark:text-gray-300">Categoria</th><th class="py-2 px-3 text-right dark:text-gray-300">Valor</th><th class="py-2 px-3 text-center dark:text-gray-300">Status</th><th class="py-2 px-3 text-center dark:text-gray-300">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expense-table-body"></tbody>
+                        </table>
+                        <p id="no-expenses" class="text-center text-gray-500 dark:text-gray-400 py-8">Nenhuma despesa registrada para este mês.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700 dark:text-gray-200">Rendimentos do Mês</h3>
+                    <div class="space-y-3">
+                        <div>
+                             <label for="salario-fixo-input" class="text-sm text-gray-600 dark:text-gray-300">Salário Fixo</label>
+                             <div class="flex items-center mt-1">
+                                <span class="text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 p-2.5 rounded-l-lg border border-r-0 border-gray-300 dark:border-gray-600">R$</span>
+                                <input type="number" id="salario-fixo-input" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-r-lg dark:bg-gray-700 dark:text-white" placeholder="0.00">
+                             </div>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm text-gray-600 dark:text-gray-300">Renda Extra (Foto, Mkt, etc.)</label>
+                                <button id="add-income-btn" class="text-sm bg-green-600 text-white px-3 py-1 rounded-md font-semibold hover:bg-green-700 transition flex items-center space-x-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                    <span>Adicionar</span>
+                                </button>
+                            </div>
+                            <div id="extra-income-list" class="space-y-1 text-sm max-h-28 overflow-y-auto pr-2"></div>
+                            <p id="no-extra-income" class="text-center text-xs text-gray-500 dark:text-gray-400 py-3">Nenhuma renda extra registrada.</p>
+                            <div class="border-t border-gray-100 dark:border-gray-700/50 mt-2 pt-2 flex justify-between items-center text-sm">
+                                <span class="text-gray-600 dark:text-gray-300 font-semibold">Total Renda Extra:</span>
+                                <span id="total-extra-income-display" class="font-bold text-receita">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-gray-600 dark:text-gray-300">Saldo do Mês Anterior:</span>
+                                <span id="saldo-anterior-display" class="font-bold text-neutro">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-3 flex justify-between items-center text-lg">
+                            <span class="text-gray-600 dark:text-gray-300 font-semibold">Total de Entradas:</span>
+                            <span id="total-entradas-display" class="font-bold text-receita">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Fontes de Renda Extra</h3>
+                    <div id="income-analysis-list" class="space-y-2"></div>
+                    <p id="no-income-analysis" class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">Registre suas rendas extras para ver a análise aqui.</p>
+                </div>
+
+                <div id="credit-card-widget" class="p-6 rounded-xl shadow-lg text-white card-bg relative overflow-hidden">
+                    <div class="flex justify-between items-start">
+                        <div class="space-y-4">
+                             <h3 class="text-lg font-semibold text-gray-300">Fatura do Cartão</h3>
+                            <p id="credit-card-total" class="text-3xl font-bold">R$ 0,00</p>
+                        </div>
+                         <svg class="w-12 h-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                    </div>
+                    <div class="absolute -bottom-4 -right-4 w-24 h-24 bg-white/10 rounded-full"></div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Resumo & Metas</h3>
+                     <div class="space-y-4">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Renda Comprometida:</span>
+                            <span id="salario-comprometido" class="font-bold dark:text-gray-100">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"><div id="salario-comprometido-bar" class="bg-despesa h-2.5 rounded-full" style="width: 0%"></div></div>
+                        <div>
+                             <label for="meta-economia" class="text-sm text-gray-600 dark:text-gray-300">Meta de Economia (%)</label>
+                             <div class="flex items-center mt-1">
+                                <input type="number" id="meta-economia" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-l-lg dark:bg-gray-700 dark:text-white" placeholder="Ex: 20" value="10">
+                                <span class="text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 p-2.5 rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-600">%</span>
+                             </div>
+                        </div>
+                         <div class="flex justify-between items-center text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Progresso da Meta:</span>
+                            <span id="progresso-meta" class="font-bold dark:text-gray-100">R$ 0,00 de R$ 0,00</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"><div id="progresso-meta-bar" class="bg-receita h-2.5 rounded-full" style="width: 0%"></div></div>
+                    </div>
+                 </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Despesas por Categoria</h3>
+                    <canvas id="expense-chart"></canvas>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow">
+                    <h3 class="text-xl font-semibold mb-4 text-violet-600 flex items-center space-x-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        <span>Caixinha de Equipamentos</span>
+                    </h3>
+                    <p class="text-3xl font-bold text-caixinha mb-4" id="caixinha-total">R$ 0,00</p>
+                    <div class="flex space-x-2">
+                        <input type="number" id="caixinha-input" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white" placeholder="Valor">
+                        <button id="caixinha-add-btn" class="bg-caixinha text-white px-3 py-2 rounded-lg font-semibold hover:bg-violet-700 transition">Adicionar</button>
+                        <button id="caixinha-withdraw-btn" class="bg-amber-500 text-white px-3 py-2 rounded-lg font-semibold hover:bg-amber-600 transition">Retirar</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-backdrop" class="modal-backdrop"></div>
+    <div id="expense-modal" class="modal bg-white dark:bg-gray-800 rounded-lg shadow-xl w-11/12 md:w-1/2 lg:w-1/3 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="expense-modal-title" class="text-2xl font-bold text-gray-800 dark:text-gray-100">Nova Despesa</h2>
+                <button class="close-modal-btn p-1 rounded-full hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <form id="expense-form" class="space-y-4">
+                <input type="hidden" id="expense-id">
+                <input type="hidden" id="expense-series-id">
+                <div>
+                    <label for="expense-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição</label>
+                    <input type="text" id="expense-description" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: Aluguel, Supermercado" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="expense-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor</label>
+                        <input type="number" step="0.01" id="expense-amount" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="0.00" required>
+                    </div>
+                    <div>
+                        <label for="expense-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Data</label>
+                        <input type="date" id="expense-date" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="expense-category" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria</label>
+                        <select id="expense-category" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                             <option value="Moradia">Moradia</option><option value="Alimentação">Alimentação</option><option value="Transporte">Transporte</option><option value="Lazer">Lazer</option><option value="Saúde">Saúde</option><option value="Dívidas">Dívidas</option><option value="Investimento">Investimento</option><option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="expense-status" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                        <select id="expense-status" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                            <option value="Pago">Pago</option><option value="Pendente">Pendente</option><option value="Atrasado">Atrasado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
+                     <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Forma de Pagamento</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center"><input type="radio" name="payment-method" value="dinheiro" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" checked> <span class="ml-2 dark:text-gray-300">Dinheiro/Débito</span></label>
+                            <label class="flex items-center"><input type="radio" name="payment-method" value="cartao_credito" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"> <span class="ml-2 dark:text-gray-300">Cartão de Crédito</span></label>
+                        </div>
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tipo de Lançamento</label>
+                        <div class="flex gap-4">
+                            <label class="flex items-center"><input type="radio" name="installment-type" value="unica" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" checked> <span class="ml-2 dark:text-gray-300">Única</span></label>
+                            <label class="flex items-center"><input type="radio" name="installment-type" value="parcelada" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"> <span class="ml-2 dark:text-gray-300">Parcelada</span></label>
+                        </div>
+                    </div>
+                    <div id="installments-section" class="hidden">
+                        <label for="expense-installments" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Número de Parcelas</label>
+                        <input type="number" id="expense-installments" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: 3" min="2">
+                    </div>
+                     <div class="flex items-center">
+                        <input id="expense-recurring" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <label for="expense-recurring" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">Despesa Fixa (Repetir todo mês)</label>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="cancel-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="income-modal" class="modal bg-white dark:bg-gray-800 rounded-lg shadow-xl w-11/12 md:w-1/2 lg:w-1/3">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="income-modal-title" class="text-2xl font-bold text-gray-800 dark:text-gray-100">Nova Renda Extra</h2>
+                <button class="close-modal-btn p-1 rounded-full hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <form id="income-form" class="space-y-4">
+                <input type="hidden" id="income-id">
+                <div>
+                    <label for="income-date" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Data</label>
+                    <input type="date" id="income-date" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                </div>
+                <div>
+                    <label for="income-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição</label>
+                    <input type="text" id="income-description" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Ex: Ensaio fotográfico, Social Media" required>
+                </div>
+                 <div>
+                    <label for="income-amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor</label>
+                    <input type="number" step="0.01" id="income-amount" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="0.00" required>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="cancel-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancelar</button>
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script type="module">
+        // --- Variáveis Globais ---
+        let allTransactions = [];
+        let userConfig = {};
+        let currentDate = new Date();
+        let expenseChartInstance = null;
+        
+        // --- Elementos do DOM ---
+        const loader = document.getElementById('loader');
+        const mainApp = document.getElementById('app');
+        
+        // --- Lógica de Dados com LocalStorage ---
+        function generateUUID() {
+            return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+            );
+        }
+
+        function loadDataFromLocalStorage() {
+            const storedTransactions = localStorage.getItem('equilibra-transactions');
+            const storedConfig = localStorage.getItem('equilibra-config');
+            allTransactions = storedTransactions ? JSON.parse(storedTransactions) : [];
+            userConfig = storedConfig ? JSON.parse(storedConfig) : { metaEconomia: 10, theme: 'light' };
+        }
+
+        function saveDataToLocalStorage() {
+            localStorage.setItem('equilibra-transactions', JSON.stringify(allTransactions));
+            localStorage.setItem('equilibra-config', JSON.stringify(userConfig));
+        }
+
+        // --- Inicialização ---
+        function initializeApp() {
+            loadDataFromLocalStorage();
+            applyTheme(userConfig.theme);
+            document.getElementById('meta-economia').value = userConfig.metaEconomia || 10;
+            mainApp.style.display = 'block';
+            loader.style.display = 'none';
+            refreshUIForCurrentMonth();
+        }
+
+        function refreshUIForCurrentMonth() {
+            updateDateDisplay();
+            const saldoAnterior = fetchPreviousMonthBalance();
+            document.getElementById('saldo-anterior-display').textContent = formatCurrency(saldoAnterior);
+            renderUI();
+            updateAllCalculations(saldoAnterior);
+        }
+        
+        // --- Lógica de Dados ---
+        function fetchPreviousMonthBalance() {
+            const prevDate = new Date(currentDate);
+            prevDate.setMonth(prevDate.getMonth() - 1);
+            const prevMonthId = `${prevDate.getFullYear()}-${(prevDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            
+            const prevMonthTransactions = allTransactions.filter(tx => tx.monthId === prevMonthId);
+            if (prevMonthTransactions.length === 0) return 0;
+
+            const paidTransactions = prevMonthTransactions
+                .filter(tx => (tx.status === 'Pago' || !tx.status) && tx.category !== 'Caixinha');
+            return paidTransactions.reduce((sum, t) => sum + t.amount, 0);
+        }
+        
+        // --- Renderização e Cálculos ---
+        function renderUI() {
+            renderExpenseTable();
+            renderExtraIncomeList();
+            renderIncomeAnalysis();
+            updateTotalInvestidoDisplay();
+        }
+
+        function getCurrentMonthTransactions() {
+            const monthId = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            return allTransactions.filter(tx => tx.monthId === monthId).sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+
+        function renderExpenseTable() {
+            const tableBody = document.getElementById('expense-table-body');
+            const noExpensesMsg = document.getElementById('no-expenses');
+            const monthTransactions = getCurrentMonthTransactions();
+            const expensesOnly = monthTransactions.filter(tx => tx.amount < 0 && tx.description !== 'Saída para Caixinha');
+            
+            tableBody.innerHTML = '';
+            if (expensesOnly.length === 0) {
+                noExpensesMsg.style.display = 'block'; return;
+            }
+            noExpensesMsg.style.display = 'none';
+            expensesOnly.forEach(tx => {
+                const date = new Date(tx.date + 'T00:00:00-03:00');
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50';
+                row.innerHTML = `<td class="py-3 px-3 dark:text-gray-300">${date.toLocaleDateString('pt-BR')}</td><td class="py-3 px-3 font-medium dark:text-gray-100">${tx.description}</td><td class="py-3 px-3 text-sm text-gray-600 dark:text-gray-300">${tx.category}</td><td class="py-3 px-3 text-right font-semibold text-despesa">${formatCurrency(tx.amount)}</td><td class="py-3 px-3 text-center"><span class="px-2 py-1 text-xs font-semibold rounded-full ${getStatusClass(tx.status)}">${tx.status}</span></td><td class="py-3 px-3 text-center"><button class="edit-btn p-1 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400" data-type="expense" data-id="${tx.id}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button><button class="delete-btn p-1 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400" data-id="${tx.id}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button></td>`;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function renderExtraIncomeList() {
+            const listContainer = document.getElementById('extra-income-list');
+            const noIncomeMsg = document.getElementById('no-extra-income');
+            const monthTransactions = getCurrentMonthTransactions();
+            const extraIncomes = monthTransactions.filter(tx => tx.category === 'Renda Extra');
+            
+            listContainer.innerHTML = '';
+            if (extraIncomes.length === 0) {
+                noIncomeMsg.style.display = 'block'; return;
+            }
+            noIncomeMsg.style.display = 'none';
+            extraIncomes.forEach(tx => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-1.5 rounded';
+                item.innerHTML = `<span class="truncate dark:text-gray-300" title="${tx.description}">${tx.description}</span><div class="flex items-center space-x-2"><span class="font-semibold text-receita">${formatCurrency(tx.amount)}</span><button class="edit-btn text-gray-400 hover:text-blue-500" data-type="income" data-id="${tx.id}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button><button class="delete-btn text-gray-400 hover:text-red-500" data-id="${tx.id}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button></div>`;
+                listContainer.appendChild(item);
+            });
+        }
+        
+        function renderIncomeAnalysis() {
+            const listContainer = document.getElementById('income-analysis-list');
+            const noAnalysisMsg = document.getElementById('no-income-analysis');
+            const monthTransactions = getCurrentMonthTransactions();
+            const extraIncomes = monthTransactions.filter(tx => tx.category === 'Renda Extra');
+            
+            if (!listContainer || !noAnalysisMsg) return; // Defensive check
+            
+            listContainer.innerHTML = '';
+            if (extraIncomes.length === 0) {
+                noAnalysisMsg.style.display = 'block'; 
+                listContainer.style.display = 'none';
+                return;
+            }
+            noAnalysisMsg.style.display = 'none';
+            listContainer.style.display = 'block';
+
+            const groupedIncomes = extraIncomes.reduce((acc, tx) => {
+                acc[tx.description] = (acc[tx.description] || 0) + tx.amount;
+                return acc;
+            }, {});
+            const sortedIncomes = Object.entries(groupedIncomes).sort(([, a], [, b]) => b - a);
+            sortedIncomes.forEach(([description, total]) => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center text-sm';
+                item.innerHTML = `<span class="text-gray-600 dark:text-gray-300 truncate">${description}</span><span class="font-semibold text-gray-800 dark:text-gray-100">${formatCurrency(total)}</span>`;
+                listContainer.appendChild(item);
+            });
+        }
+        
+        function updateDateDisplay() {
+            document.getElementById('current-month-year').textContent = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        }
+        
+        function updateAllCalculations(saldoMesAnterior) {
+            const monthTransactions = getCurrentMonthTransactions();
+            const salarioFixoTx = monthTransactions.find(tx => tx.category === 'Salário');
+            document.getElementById('salario-fixo-input').value = salarioFixoTx ? salarioFixoTx.amount : '';
+            const paidTransactions = monthTransactions.filter(tx => tx.status === 'Pago' || !tx.status);
+            
+            const totalReceitasMes = paidTransactions
+                .filter(t => t.amount > 0 && t.category !== 'Caixinha')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const totalDespesasMes = paidTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0);
+            const saldoFinalTotal = saldoMesAnterior + totalReceitasMes + totalDespesasMes;
+            const totalRendaExtra = paidTransactions.filter(tx => tx.category === 'Renda Extra').reduce((sum, t) => sum + t.amount, 0);
+            
+            document.getElementById('total-extra-income-display').textContent = formatCurrency(totalRendaExtra);
+            document.getElementById('total-entradas-display').textContent = formatCurrency(totalReceitasMes + saldoMesAnterior);
+            document.getElementById('total-receitas').textContent = formatCurrency(totalReceitasMes);
+            document.getElementById('total-despesas').textContent = formatCurrency(totalDespesasMes);
+
+            const saldoFinalBox = document.getElementById('saldo-final-box');
+            const saldoFinalText = document.getElementById('saldo-final-text');
+            if (saldoFinalTotal >= 0) {
+                saldoFinalBox.className = 'p-4 rounded-xl shadow flex items-center justify-center text-white font-bold text-lg bg-receita';
+                saldoFinalText.textContent = `SOBROU ${formatCurrency(saldoFinalTotal)}`;
+            } else {
+                saldoFinalBox.className = 'p-4 rounded-xl shadow flex items-center justify-center text-white font-bold text-lg bg-despesa';
+                saldoFinalText.textContent = `FALTA ${formatCurrency(Math.abs(saldoFinalTotal))}`;
+            }
+
+            const totalCartaoCredito = paidTransactions
+                .filter(tx => tx.paymentMethod === 'cartao_credito' && tx.amount < 0)
+                .reduce((sum, tx) => sum + tx.amount, 0);
+            document.getElementById('credit-card-total').textContent = formatCurrency(totalCartaoCredito);
+
+            const saldoDoMesAtual = totalReceitasMes + totalDespesasMes;
+            updateAnaliseMensal(saldoDoMesAtual, totalReceitasMes, totalDespesasMes);
+            updateExpenseChart();
+        }
+        
+        function updateTotalInvestidoDisplay() {
+            const caixinhaTransactions = allTransactions.filter(tx => tx.category === 'Caixinha');
+            const currentCaixinhaTotal = caixinhaTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+            document.getElementById('caixinha-total').textContent = formatCurrency(currentCaixinhaTotal);
+
+            const paidInvestments = allTransactions
+                .filter(tx => tx.category === 'Investimento' && tx.description !== 'Saída para Caixinha' && tx.amount < 0 && (tx.status === 'Pago' || !tx.status))
+                .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            
+            document.getElementById('total-investido').textContent = formatCurrency(paidInvestments + currentCaixinhaTotal);
+        }
+
+        function updateAnaliseMensal(saldoMes, totalReceitas, totalDespesas) {
+            const metaPercent = parseFloat(userConfig.metaEconomia) || 0;
+            const despesasAbs = Math.abs(totalDespesas);
+            const percentComprometido = totalReceitas > 0 ? (despesasAbs / totalReceitas) * 100 : 0;
+            document.getElementById('salario-comprometido').textContent = `${percentComprometido.toFixed(1)}%`;
+            document.getElementById('salario-comprometido-bar').style.width = `${Math.min(percentComprometido, 100)}%`;
+            const metaValor = totalReceitas * (metaPercent / 100);
+            const progressoMetaPercent = metaValor > 0 ? (saldoMes / metaValor) * 100 : 0;
+            document.getElementById('progresso-meta').textContent = `${formatCurrency(Math.max(0, saldoMes))} de ${formatCurrency(metaValor)}`;
+            document.getElementById('progresso-meta-bar').style.width = `${Math.min(Math.max(0, progressoMetaPercent), 100)}%`;
+        }
+        
+        function updateExpenseChart() {
+            const ctx = document.getElementById('expense-chart').getContext('2d');
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            const monthTransactions = getCurrentMonthTransactions();
+            const paidExpenses = monthTransactions.filter(tx => tx.amount < 0 && tx.description !== 'Saída para Caixinha' && (tx.status === 'Pago' || !tx.status));
+            const categories = [...new Set(paidExpenses.map(tx => tx.category))];
+            const data = categories.map(cat => paidExpenses.filter(tx => tx.category === cat).reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+            const backgroundColors = [ '#EF4444', '#F59E0B', '#8B5CF6', '#3B82F6', '#10B981', '#6366F1', '#EC4899', '#6B7280' ];
+            if (expenseChartInstance) { expenseChartInstance.destroy(); }
+            if (paidExpenses.length === 0) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); return; }
+            expenseChartInstance = new Chart(ctx, {
+                type: 'doughnut', data: { labels: categories, datasets: [{ label: 'Despesas por Categoria', data: data, backgroundColor: backgroundColors, borderWidth: 0 }] }, options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: isDarkMode ? '#d1d5db' : '#4b5563' }}, tooltip: { callbacks: { label: (context) => `${context.label}: ${formatCurrency(context.raw)}` }}}}
+            });
+        }
+        
+        // --- Interações do Usuário (Modais, Forms, etc.) ---
+        const expenseModal = document.getElementById('expense-modal');
+        const incomeModal = document.getElementById('income-modal');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        
+        function openModal(type, tx = null) {
+            let modal, form, title;
+            if (type === 'expense') {
+                modal = expenseModal; form = document.getElementById('expense-form'); title = document.getElementById('expense-modal-title'); form.reset();
+                document.getElementById('installments-section').classList.add('hidden');
+                form.elements['installment-type'].forEach(radio => radio.disabled = false);
+                form.elements['expense-recurring'].disabled = false;
+                
+                if(tx) {
+                    title.textContent = 'Editar Despesa'; 
+                    form.elements['expense-id'].value = tx.id; 
+                    form.elements['expense-series-id'].value = tx.seriesId || '';
+                    form.elements['expense-date'].value = tx.date; 
+                    form.elements['expense-description'].value = tx.description.replace(/ \(\d+\/\d+\)$/, '');
+                    form.elements['expense-amount'].value = Math.abs(tx.amount); 
+                    form.elements['expense-category'].value = tx.category; 
+                    form.elements['expense-status'].value = tx.status;
+                    form.querySelector(`input[name="payment-method"][value="${tx.paymentMethod || 'dinheiro'}"]`).checked = true;
+                    // Disable editing of installment/recurring properties for simplicity
+                    if (tx.seriesId) {
+                         form.elements['installment-type'].forEach(radio => radio.disabled = true);
+                         form.elements['expense-recurring'].disabled = true;
+                    }
+
+                } else {
+                    title.textContent = 'Nova Despesa'; 
+                    form.elements['expense-id'].value = ''; 
+                    form.elements['expense-series-id'].value = '';
+                    form.elements['expense-date'].valueAsDate = new Date();
+                }
+            } else {
+                modal = incomeModal; form = document.getElementById('income-form'); title = document.getElementById('income-modal-title'); form.reset();
+                 if(tx) {
+                    title.textContent = 'Editar Renda Extra'; 
+                    form.elements['income-id'].value = tx.id; 
+                    form.elements['income-date'].value = tx.date; 
+                    form.elements['income-description'].value = tx.description; 
+                    form.elements['income-amount'].value = tx.amount;
+                } else {
+                    title.textContent = 'Nova Renda Extra'; 
+                    form.elements['income-id'].value = ''; 
+                    form.elements['income-date'].valueAsDate = new Date();
+                }
+            }
+            modal.style.display = 'block';
+            modalBackdrop.style.display = 'block';
+        }
+
+        function closeModal() {
+            expenseModal.style.display = 'none';
+            incomeModal.style.display = 'none';
+            modalBackdrop.style.display = 'none';
+        }
+
+        function handleExpenseFormSubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const id = form.elements['expense-id'].value;
+            if (id) { // Editing existing transaction
+                const originalTx = allTransactions.find(t => t.id === id);
+                const updatedData = {
+                    date: form.elements['expense-date'].value,
+                    description: form.elements['expense-description'].value,
+                    amount: -Math.abs(parseFloat(form.elements['expense-amount'].value)),
+                    category: form.elements['expense-category'].value,
+                    status: form.elements['expense-status'].value,
+                    paymentMethod: form.querySelector('input[name="payment-method"]:checked').value,
+                    monthId: `${new Date(form.elements['expense-date'].value + 'T00:00:00').getFullYear()}-${(new Date(form.elements['expense-date'].value + 'T00:00:00').getMonth() + 1).toString().padStart(2, '0')}`
+                };
+                 saveTransaction(id, updatedData);
+
+            } else { // Creating new transaction(s)
+                const newTransactions = [];
+                const seriesId = generateUUID();
+                const description = form.elements['expense-description'].value;
+                const totalAmount = parseFloat(form.elements['expense-amount'].value);
+                const category = form.elements['expense-category'].value;
+                const paymentMethod = form.querySelector('input[name="payment-method"]:checked').value;
+                const initialDate = new Date(form.elements['expense-date'].value + 'T00:00:00');
+                const isRecurring = form.elements['expense-recurring'].checked;
+                const installmentType = form.querySelector('input[name="installment-type"]:checked').value;
+                const numInstallments = parseInt(form.elements['expense-installments'].value);
+
+                if (installmentType === 'parcelada' && numInstallments >= 2) {
+                    const installmentAmount = totalAmount / numInstallments;
+                    for (let i = 0; i < numInstallments; i++) {
+                        const installmentDate = new Date(initialDate);
+                        installmentDate.setMonth(installmentDate.getMonth() + i);
+                        const txData = {
+                            id: generateUUID(),
+                            seriesId: seriesId,
+                            date: installmentDate.toISOString().split('T')[0],
+                            description: `${description} (${i + 1}/${numInstallments})`,
+                            amount: -Math.abs(installmentAmount),
+                            category: category,
+                            status: i === 0 ? form.elements['expense-status'].value : 'Pendente',
+                            paymentMethod: paymentMethod,
+                            monthId: `${installmentDate.getFullYear()}-${(installmentDate.getMonth() + 1).toString().padStart(2, '0')}`
+                        };
+                        newTransactions.push(txData);
+                    }
+                } else if (isRecurring) {
+                    for (let i = 0; i < 12; i++) { // Create for the next 12 months
+                        const recurringDate = new Date(initialDate);
+                        recurringDate.setMonth(recurringDate.getMonth() + i);
+                         const txData = {
+                            id: generateUUID(),
+                            seriesId: seriesId,
+                            date: recurringDate.toISOString().split('T')[0],
+                            description: description,
+                            amount: -Math.abs(totalAmount),
+                            category: category,
+                            status: i === 0 ? form.elements['expense-status'].value : 'Pendente',
+                            paymentMethod: paymentMethod,
+                            monthId: `${recurringDate.getFullYear()}-${(recurringDate.getMonth() + 1).toString().padStart(2, '0')}`
+                        };
+                        newTransactions.push(txData);
+                    }
+                } else { // Single transaction
+                    const txData = {
+                        id: generateUUID(),
+                        date: initialDate.toISOString().split('T')[0],
+                        description: description,
+                        amount: -Math.abs(totalAmount),
+                        category: category,
+                        status: form.elements['expense-status'].value,
+                        paymentMethod: paymentMethod,
+                        monthId: `${initialDate.getFullYear()}-${(initialDate.getMonth() + 1).toString().padStart(2, '0')}`
+                    };
+                    newTransactions.push(txData);
+                }
+
+                allTransactions.push(...newTransactions);
+                saveDataToLocalStorage();
+                refreshUIForCurrentMonth();
+                closeModal();
+            }
+        }
+        
+        function handleIncomeFormSubmit(e) {
+            e.preventDefault(); const form = e.target; const id = form.elements['income-id'].value; const amount = Math.abs(parseFloat(form.elements['income-amount'].value)); const dateValue = form.elements['income-date'].value; const monthId = `${new Date(dateValue + 'T00:00:00').getFullYear()}-${(new Date(dateValue + 'T00:00:00').getMonth() + 1).toString().padStart(2, '0')}`;
+            const txData = { date: dateValue, description: form.elements['income-description'].value, amount: amount, category: 'Renda Extra', status: 'Pago', monthId: monthId };
+            saveTransaction(id, txData);
+        }
+
+        function saveTransaction(id, data) {
+             if (id) {
+                const index = allTransactions.findIndex(tx => tx.id === id);
+                if (index > -1) allTransactions[index] = { ...allTransactions[index], ...data };
+             } else {
+                allTransactions.push({ id: generateUUID(), ...data });
+             }
+             saveDataToLocalStorage();
+             refreshUIForCurrentMonth();
+             closeModal();
+        }
+
+        function deleteTransaction(id) {
+            const txToDelete = allTransactions.find(tx => tx.id === id);
+            if (txToDelete && txToDelete.seriesId) {
+                if (confirm('Esta é uma despesa recorrente/parcelada. Deseja excluir todas as futuras ocorrências também?')) {
+                    const futureTransactionsToDelete = allTransactions.filter(
+                        tx => tx.seriesId === txToDelete.seriesId && new Date(tx.date) >= new Date(txToDelete.date)
+                    );
+                    const idsToDelete = futureTransactionsToDelete.map(tx => tx.id);
+                    allTransactions = allTransactions.filter(tx => !idsToDelete.includes(tx.id));
+                } else {
+                    allTransactions = allTransactions.filter(tx => tx.id !== id);
+                }
+            } else {
+                 allTransactions = allTransactions.filter(tx => tx.id !== id);
+            }
+            saveDataToLocalStorage();
+            refreshUIForCurrentMonth();
+        }
+        
+        function handleTableClicks(e) {
+            const target = e.target.closest('button'); if (!target) return;
+            const id = target.dataset.id;
+            const tx = allTransactions.find(t => t.id === id);
+            if (target.classList.contains('edit-btn')) {
+                const type = target.dataset.type;
+                openModal(type, tx);
+            } else if (target.classList.contains('delete-btn')) {
+                if (confirm('Tem certeza que deseja excluir esta transação?')) { 
+                    deleteTransaction(id);
+                }
+            }
+        }
+        
+        function handleSalarioFixoChange(e) {
+            const newSalario = parseFloat(e.target.value) || 0; 
+            const monthId = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            
+            const existingSalarioIndex = allTransactions.findIndex(tx => tx.monthId === monthId && tx.category === 'Salário');
+
+            if (existingSalarioIndex > -1) {
+                if (newSalario > 0) {
+                    allTransactions[existingSalarioIndex].amount = newSalario;
+                } else {
+                    allTransactions.splice(existingSalarioIndex, 1);
+                }
+            } else if (newSalario > 0) {
+                const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString().split('T')[0];
+                const txData = { id: generateUUID(), date: firstDayOfMonth, description: 'Salário Fixo', amount: newSalario, category: 'Salário', status: 'Pago', monthId: monthId };
+                allTransactions.push(txData);
+            }
+            saveDataToLocalStorage();
+            refreshUIForCurrentMonth();
+        }
+
+        function handleConfigChange() {
+            userConfig.metaEconomia = parseInt(document.getElementById('meta-economia').value) || 10;
+            saveDataToLocalStorage();
+            refreshUIForCurrentMonth();
+        }
+        
+        function addCaixinha() {
+            const input = document.getElementById('caixinha-input'); const amount = parseFloat(input.value); if (!amount || amount <= 0) return;
+            const monthId = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            const today = new Date().toISOString().split('T')[0];
+            
+            const deposit = { id: generateUUID(), date: today, description: "Depósito na Caixinha", amount: amount, category: "Caixinha", status: "Pago", monthId: monthId };
+            const expense = { id: generateUUID(), date: today, description: "Saída para Caixinha", amount: -amount, category: "Investimento", status: "Pago", monthId: monthId };
+            
+            allTransactions.push(deposit, expense);
+            saveDataToLocalStorage();
+            refreshUIForCurrentMonth();
+            input.value = '';
+        }
+        
+        function withdrawCaixinha() {
+            const input = document.getElementById('caixinha-input'); const amount = parseFloat(input.value);
+            const caixinhaTransactions = allTransactions.filter(tx => tx.category === 'Caixinha');
+            const currentCaixinhaTotal = caixinhaTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+            if (!amount || amount <= 0) { input.classList.add('border-red-500'); setTimeout(() => input.classList.remove('border-red-500'), 2000); return; }
+            if (amount > currentCaixinhaTotal) {
+                console.error("Tentativa de retirar mais do que o saldo da caixinha."); input.classList.add('border-red-500'); input.value = ''; input.placeholder = "Saldo insuficiente!"; setTimeout(() => { input.classList.remove('border-red-500'); input.placeholder = "Valor"; }, 2000); return;
+            }
+            const monthId = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`; const today = new Date().toISOString().split('T')[0];
+            
+            const withdrawal = { id: generateUUID(), date: today, description: "Retirada da Caixinha", amount: -amount, category: "Caixinha", status: "Pago", monthId: monthId };
+            const income = { id: generateUUID(), date: today, description: "Entrada da Caixinha", amount: amount, category: "Renda Extra", status: "Pago", monthId: monthId };
+
+            allTransactions.push(withdrawal, income);
+            saveDataToLocalStorage();
+            refreshUIForCurrentMonth();
+            input.value = '';
+        }
+        
+        // --- Helpers e Event Listeners ---
+        function applyTheme(theme) {
+            if (theme === 'dark') { document.documentElement.classList.add('dark'); document.getElementById('theme-icon-light').classList.add('hidden'); document.getElementById('theme-icon-dark').classList.remove('hidden'); } else { document.documentElement.classList.remove('dark'); document.getElementById('theme-icon-light').classList.remove('hidden'); document.getElementById('theme-icon-dark').classList.add('hidden'); }
+            if (expenseChartInstance) {
+                updateExpenseChart();
+            }
+        }
+
+        function handleThemeToggle() {
+            const newTheme = document.documentElement.classList.toggle('dark') ? 'dark' : 'light';
+            applyTheme(newTheme);
+            userConfig.theme = newTheme;
+            saveDataToLocalStorage();
+        }
+
+        function formatCurrency(value) {
+            return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function getStatusClass(status) {
+            switch (status) { case 'Pago': return 'status-pago'; case 'Pendente': return 'status-pendente'; case 'Atrasado': return 'status-atrasado'; default: return 'bg-gray-200 text-gray-800'; }
+        }
+        
+        document.addEventListener('DOMContentLoaded', initializeApp);
+        
+        document.getElementById('add-expense-btn').addEventListener('click', () => openModal('expense'));
+        document.getElementById('add-income-btn').addEventListener('click', () => openModal('income'));
+        document.querySelectorAll('.close-modal-btn, .cancel-btn').forEach(el => el.addEventListener('click', closeModal));
+        document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+        document.getElementById('expense-form').addEventListener('submit', handleExpenseFormSubmit);
+        document.getElementById('income-form').addEventListener('submit', handleIncomeFormSubmit);
+        document.getElementById('expense-table-body').addEventListener('click', handleTableClicks);
+        document.getElementById('extra-income-list').addEventListener('click', handleTableClicks);
+        document.getElementById('salario-fixo-input').addEventListener('change', handleSalarioFixoChange);
+        document.getElementById('meta-economia').addEventListener('change', handleConfigChange);
+        document.getElementById('caixinha-add-btn').addEventListener('click', addCaixinha);
+        document.getElementById('caixinha-withdraw-btn').addEventListener('click', withdrawCaixinha);
+        document.getElementById('theme-toggle').addEventListener('click', handleThemeToggle);
+
+        document.querySelectorAll('input[name="installment-type"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const installmentSection = document.getElementById('installments-section');
+                const recurringCheckbox = document.getElementById('expense-recurring');
+                if (e.target.value === 'parcelada') {
+                    installmentSection.classList.remove('hidden');
+                    recurringCheckbox.checked = false;
+                    recurringCheckbox.disabled = true;
+                } else {
+                    installmentSection.classList.add('hidden');
+                    recurringCheckbox.disabled = false;
+                }
+            });
+        });
+
+        document.getElementById('expense-recurring').addEventListener('change', (e) => {
+             document.querySelectorAll('input[name="installment-type"]').forEach(radio => {
+                radio.disabled = e.target.checked;
+                if (e.target.checked) {
+                    radio.checked = radio.value === 'unica';
+                    document.getElementById('installments-section').classList.add('hidden');
+                }
+             });
+        });
+        
+        function changeMonth(offset) { currentDate.setMonth(currentDate.getMonth() + offset); refreshUIForCurrentMonth(); }
+        document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
+        document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
+
+    </script>
+</body>
+</html>
+
